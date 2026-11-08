@@ -64,6 +64,21 @@ class MessengerNotificationListenerService : NotificationListenerService(){
 
         val messagesArray = sbn.notification?.extras?.getParcelableArray(Notification.EXTRA_MESSAGES)
 
+        //провверка для приколов с повторной озвучкой увеломдений
+        val isSummary = ((sbn.notification?.flags ?: 0) and Notification.FLAG_GROUP_SUMMARY) != 0
+        Log.d(
+            "NOTIF_DEBUG",
+            "package_name=${sbn.packageName}, key=${sbn.key}, id=${sbn.id}, post_time=${sbn.postTime} is_summary=$isSummary, msg_count=${messagesArray?.size ?: -1}"
+        )
+        if(messagesArray != null) {
+            for(msg in getMessagesFromBundleArray(messagesArray)){
+                Log.d(
+                    "NOTIF_DEBUG",
+                    "msg ts = ${msg.timestamp}, msg text = ${msg.text}"
+                )
+            }
+        }
+
         val progressMax = sbn.notification?.extras?.getInt(Notification.EXTRA_PROGRESS_MAX, -1) ?: -1
         if (progressMax > 0) return
 
