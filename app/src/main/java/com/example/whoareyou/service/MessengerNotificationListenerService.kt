@@ -30,6 +30,18 @@ class MessengerNotificationListenerService : NotificationListenerService(){
         ttsManager = TtsManager(this)
         bluetoothHeadsetChecker = BluetoothHeadsetChecker(this)
         powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+
+        ttsManager.onInterrupted = {
+            pendingRunnable?.let { handler.removeCallbacks(it) }
+            pendingRunnable = null
+            pendingMessages.clear()
+        }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        ttsManager.release()
+        super.onDestroy()
     }
 
     private fun scheduleSpeak(){
@@ -56,11 +68,30 @@ class MessengerNotificationListenerService : NotificationListenerService(){
         handler.postDelayed(runnable, 800L)
     }
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.d("NOTIF_LISTENER", "listener connected")
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.d("NOTIF_LISTENER", "listener disconnected")
+    }
+
     @SuppressLint("MissingPermission")
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        if (powerManager.isInteractive) return
-        if (sbn == null || sbn.packageName !in allowedPackages || !bluetoothHeadsetChecker.isHeadsetConnected()) return
+        Log.d("NOTIF_LISTENER", "posted: ${sbn?.packageName}")
+        if (sbn == null) return
+        if (sbn.packageName !in allowedPackages) return
+        if (powerManager.isInteractive) {
+            Log.d("NOTIF_LISTENER", "skip: screen is on")
+            return
+        }
+        if (!bluetoothHeadsetChecker.isHeadsetConnected()) {
+            Log.d("NOTIF_LISTENER", "skip: no headset or no BLUETOOTH_CONNECT permission")
+            return
+        }
 
         val messagesArray = sbn.notification?.extras?.getParcelableArray(Notification.EXTRA_MESSAGES)
 
