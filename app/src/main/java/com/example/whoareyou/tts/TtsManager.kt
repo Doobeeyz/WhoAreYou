@@ -120,13 +120,25 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     private fun speaker(text: String) {
+        if (activeUtterances.isNotEmpty() && tts?.isSpeaking != true) {
+            Log.w("TTS_MANAGER", "stale utterances without callbacks: $activeUtterances, resetting")
+            activeUtterances.clear()
+        }
         utteranceCounter++
         val id = utteranceCounter.toString()
         if (activeUtterances.isEmpty()) {
             startSpeaking()
         }
         activeUtterances.add(id)
-        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, id)
+        val result = tts?.speak(text, TextToSpeech.QUEUE_ADD, null, id)
+        Log.d("TTS_MANAGER", "speak id=$id result=$result active=$activeUtterances")
+        if (result != TextToSpeech.SUCCESS) {
+            // Для неудачного speak() колбэков не будет — убираем id сами.
+            activeUtterances.remove(id)
+            if (activeUtterances.isEmpty()) {
+                finishSpeaking()
+            }
+        }
     }
 
     private fun onUtteranceFinished(utteranceId: String?) {
@@ -146,7 +158,14 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     private fun startSpeaking() {
-        focusRequest?.let { audioManager.requestAudioFocus(it) }
+        val focusResult = focusRequest?.let { audioManager.requestAudioFocus(it) }
+        Log.d(
+            "TTS_MANAGER",
+            "audio focus request result = $focusResult " +
+                    "(${AudioManager.AUDIOFOCUS_REQUEST_GRANTED}=GRANTED, " +
+                    "${AudioManager.AUDIOFOCUS_REQUEST_FAILED}=FAILED, " +
+                    "${AudioManager.AUDIOFOCUS_REQUEST_DELAYED}=DELAYED)"
+        )
         mediaSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING))
         mediaSession.isActive = true
         playSilence()
@@ -186,7 +205,8 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     private fun finishSpeaking() {
-        focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        val abandonResult = focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        Log.d("TTS_MANAGER", "audio focus abandon result = $abandonResult")
         mediaSession.setPlaybackState(buildState(PlaybackState.STATE_STOPPED))
         // Деактивируем сессию, чтобы после озвучки кнопка паузы снова управляла плеером
         mediaSession.isActive = false
